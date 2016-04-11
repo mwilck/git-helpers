@@ -1,0 +1,28 @@
+#!/bin/bash
+
+usage () {
+	echo "Usage: git f1 <refspec>"
+}
+
+if [ $# -eq 0 ]; then
+	set -- "HEAD"
+fi
+
+refspec=$1
+shift
+
+if [ -n "$1" ]; then
+	echo "fatal: too many arguments" > /dev/stderr
+	usage > /dev/stderr
+	exit 1
+fi
+
+if [ $(git rev-parse "$refspec" 2>/dev/null | wc -l) -ne 1 ]; then
+	echo "fatal: too many commits" > /dev/stderr
+	usage > /dev/stderr
+	exit 1
+fi
+
+commit=$(git rev-list -n1 "$refspec")
+
+git format-patch --stdout --notes $commit^..$commit

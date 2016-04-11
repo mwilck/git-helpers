@@ -1,0 +1,17 @@
+#!/bin/bash -e
+
+if [ $# -eq 0 ]; then
+	set -- "HEAD"
+fi
+
+if [ $(git rev-parse "$@" 2>/dev/null | wc -l) -eq 1 ]; then
+	limit="-n1"
+fi
+
+git rev-list $limit "$@" | while read commit; do
+	git_describe=$(git describe --contains --match "v*" $commit 2>/dev/null || true)
+	if [ -z "$git_describe" ]; then
+		git_describe=$(git describe --contains --all $commit)
+	fi
+	echo "$(git log -n1 --pretty="format:%h %s" $commit) (${git_describe%%[~^]*})"
+done

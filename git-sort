@@ -1,0 +1,46 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+from __future__ import print_function
+
+import subprocess
+import sys
+
+
+class Commit(object):
+    def __init__(self, ref, line):
+        self.ref = ref
+        self.line = line
+
+    def __repr__(self):
+        return self.line
+
+    def __eq__(self, other):
+        if self.ref == other.ref:
+            return True
+
+    def __lt__(self, other):
+        args = ["git", "merge-base", "--is-ancestor", self.ref, other.ref]
+        sp = subprocess.Popen(args, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT)
+        r = sp.communicate()
+        
+        if sp.returncode == 0:
+            return True
+        elif sp.returncode == 1:
+            return False
+        else:
+            print(r[0], file=sys.stderr)
+            raise Exception("git merge-base exited with an error")
+
+
+if __name__ == '__main__':
+    commits = [
+        Commit(l.split()[0], l) for l in [
+            e.strip() for e in sys.stdin.readlines()
+        ] if l
+    ]
+
+    commits.sort()
+
+    print("\n".join([str(i) for i in commits]))
