@@ -2,10 +2,14 @@
 
 usage () {
 	echo "Usage: git f1 <refspec>"
+	echo ""
+	echo "Output one commit formatted as a patch."
+	echo ""
 }
 
-if [ $# -eq 0 ]; then
-	set -- "HEAD"
+if [ "$1" = "-h" ]; then
+	usage
+	exit
 fi
 
 refspec=$1
@@ -17,12 +21,23 @@ if [ -n "$1" ]; then
 	exit 1
 fi
 
-if [ $(git rev-parse "$refspec" 2>/dev/null | wc -l) -ne 1 ]; then
-	echo "fatal: too many commits" > /dev/stderr
-	usage > /dev/stderr
+if ! ref=$(git rev-parse --verify "${refspec:-HEAD}^{commit}"); then
 	exit 1
 fi
 
-commit=$(git rev-list -n1 "$refspec")
-
-git format-patch --stdout --notes $commit^..$commit
+if git cat-file -p $ref | awk '
+	/^parent/ {
+		n++
+		if (n > 1) {
+			exit 1
+		}
+	}
+	/^author/ {
+		exit
+	}'; then
+	# not a merge
+	git format-patch --stdout --notes --max-count=1 $ref
+else
+	echo "Warning: $ref is a merge commit" > /dev/stderr
+	git show $ref
+fi
