@@ -7,9 +7,16 @@ while read file; do
 	fi
 done <<< "$(find ./ -name "*.rej")"
 
-args+=$(git ls-files --unmerged | awk '{print $4}' | uniq)
+unmerged=$(git ls-files --unmerged | awk '{print $4}' | uniq)
+if [ "$unmerged" ]; then
+	args+=$unmerged
+fi
 
 args=$(echo "$args" | xargs)
 if [ "$args" ]; then
-	vi -p $args
+	if [ "$unmerged" ]; then
+		vi -p $args '+/^[<=>]\{7}'
+	else
+		vi -p $args
+	fi
 fi
