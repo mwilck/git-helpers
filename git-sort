@@ -3,44 +3,201 @@
 
 from __future__ import print_function
 
-import subprocess
+import heapq
+import os
+import pygit2
 import sys
 
+debug = False
 
+class CommitPrioQ(object):
+    def __init__(self, iterable=[]):
+        self.heap = list(iterable)
+        heapq.heapify(self.heap)
+        self.values = set([commit.ref for commit in self.heap])
+
+    def __repr__(self):
+        return ", ".join(["(%d, %s,)" % (commit.time, str(commit),) for commit
+                          in sorted(self.heap)])
+
+    def push(self, commit):
+        if commit.ref not in self.values:
+            heapq.heappush(self.heap, commit)
+            self.values.add(commit.ref)
+
+    def pop(self):
+        commit = heapq.heappop(self.heap)
+        self.values.remove(commit.ref)
+        return commit
+
+    def has_nonflagged(self, flagged):
+        "Cardinality of queue - flagged is non null"
+        for e in self.values:
+            if e not in flagged:
+                return True
+        return False
+
+
+class FlagStore(object):
+    def __init__(self, **kwargs):
+        sets = {}
+        for flag, items in kwargs.iteritems():
+            sets[flag] = set(items)
+        self.sets = sets
+
+    def __getitem__(self, item):
+        "Return the set of flags for an item"
+        result = set()
+        for flag, items in super(FlagStore,
+                                 self).__getattribute__("sets").iteritems():
+            if item in items:
+                result.add(flag)
+        return result
+
+    def __setitem__(self, item, flags):
+        for flag, items in super(FlagStore,
+                                 self).__getattribute__("sets").iteritems():
+            if flag in flags:
+                items.add(item)
+            else:
+                items.discard(item)
+
+    def __getattribute__(self, flag):
+        "Return the set of items for a flag"
+        return super(FlagStore, self).__getattribute__("sets")[flag]
+
+
+def lt(repo, one, two):
+    """
+    Is "one" an ancestor (reachable from) of "two"?
+
+    This algorithms is a simplified version of paint_down_to_common() in the
+    git sources. We can simplify because, for our use case, there is only a
+    single "two" and we are not interested in the merge-base, we just want to
+    check ancestry.
+    """
+    if one.time > two.time:
+        if debug:
+            print("shortcut")
+        return False
+
+    queue = CommitPrioQ((one, two,))
+
+    fs = FlagStore(P1=[one.ref], P2=[two.ref], STALE=[])
+
+    if debug:
+        print("p1: %s" % (", ".join([str(pygit2.Oid(e))[:12] for e in
+                                     fs.P1]),))
+        print("p2: %s" % (", ".join([str(pygit2.Oid(e))[:12] for e in
+                                     fs.P2]),))
+
+    while queue.has_nonflagged(fs.STALE):
+        commit = queue.pop()
+        flags = fs[commit.ref]
+
+        if debug:
+            print("popped %s:%s" % (str(commit), flags,))
+
+        if flags == set(["P1", "P2"]):
+            flags.add("STALE")
+            if debug:
+                print("found a merge")
+
+        for p_id in commit.parent_ids:
+            p = repo[p_id]
+            p_flags = fs[p.ref]
+            if p_flags == flags:
+                continue
+
+            if p.ref == one.ref and "P2" in flags:
+                if debug:
+                    print("shortcut")
+                return True
+            fs[p.ref] = p_flags | flags
+            queue.push(p)
+            if debug:
+                print("pushed %s: +%s" % (str(p), flags,))
+
+    if debug:
+        print("p1: %s" % (", ".join([str(pygit2.Oid(e))[:12] for e in
+                                     fs.P1]),))
+        print("p2: %s" % (", ".join([str(pygit2.Oid(e))[:12] for e in
+                                     fs.P2]),))
+
+    if one.ref in fs.P2:
+        return True
+    else:
+        return False
+
+
+# Sort by date, insert into prio queue
 class Commit(object):
-    def __init__(self, ref, line):
+    def __init__(self, ref, time, parent_ids):
         self.ref = ref
+        self.time = time
+        self.parent_ids = parent_ids
+
+    def __lt__(self, other):
+        # newer commits with larger date first
+        return self.time > other.time
+
+    def __repr__(self):
+        return str(pygit2.Oid(self.ref))[:12]
+
+
+# Sort by topo order
+class Line(object):
+    def __init__(self, repo, line):
+        self.repo = repo
         self.line = line
+        self.commit = repo[self.line.split()[0]]
+
+    def __lt__(self, other):
+        return lt(self.repo, self.commit, other.commit)
 
     def __repr__(self):
         return self.line
 
-    def __eq__(self, other):
-        if self.ref == other.ref:
-            return True
 
-    def __lt__(self, other):
-        args = ["git", "merge-base", "--is-ancestor", self.ref, other.ref]
-        sp = subprocess.Popen(args, stdout=subprocess.PIPE,
-                              stderr=subprocess.STDOUT)
-        r = sp.communicate()
-        
-        if sp.returncode == 0:
-            return True
-        elif sp.returncode == 1:
-            return False
-        else:
-            print(r[0], file=sys.stderr)
-            raise Exception("git merge-base exited with an error")
+class RepoCache(object):
+    def __init__(self, pg2repo):
+        self.pg2repo = pg2repo
+        self.cache = {}
+
+    def __getitem__(self, ref):
+        try:
+            return self.cache[ref]
+        except KeyError:
+            try:
+                pg2commit = self.pg2repo[pygit2.Oid(ref)]
+            except KeyError:
+                pg2commit = self.pg2repo.revparse_single(ref)
+            committer = pg2commit.committer
+            result = Commit(pg2commit.id.raw,
+                            committer.time - committer.offset,
+                            [p.raw for p in pg2commit.parent_ids])
+            self.cache[ref] = result
+            return result
 
 
-if __name__ == '__main__':
-    commits = [
-        Commit(l.split()[0], l) for l in [
-            e.strip() for e in sys.stdin.readlines()
-        ] if l
-    ]
+if __name__ == "__main__":
+    path = pygit2.discover_repository(os.getcwd())
+    repo = RepoCache(pygit2.Repository(path))
 
-    commits.sort()
+    if len(sys.argv) == 3:
+        a = repo[sys.argv[1]]
+        b = repo[sys.argv[2]]
+        result = lt(repo, a, b)
+        convert = {
+            True : " <",
+            False : "!<",
+        }
+        print("%s %s %s" % (str(a), convert[result], str(b),))
+    else:
+        commits = [Line(repo, l) for l in
+                   [e.strip() for e in sys.stdin.readlines()]
+                   if l]
 
-    print("\n".join([str(i) for i in commits]))
+        commits.sort()
+
+        print("\n".join([str(i) for i in commits]))
