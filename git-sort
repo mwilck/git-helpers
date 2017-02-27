@@ -30,43 +30,15 @@ class CommitPrioQ(object):
         self.values.remove(commit.ref)
         return commit
 
-    def has_nonflagged(self, flagged):
+    def has_nonstale(self, repo, seq):
         "Cardinality of queue - flagged is non null"
         for e in self.values:
-            if e not in flagged:
+            if repo[e].flags_stale != seq:
                 return True
         return False
 
 
-class FlagStore(object):
-    def __init__(self, **kwargs):
-        sets = {}
-        for flag, items in kwargs.iteritems():
-            sets[flag] = set(items)
-        self.sets = sets
-
-    def __getitem__(self, item):
-        "Return the set of flags for an item"
-        result = set()
-        for flag, items in super(FlagStore,
-                                 self).__getattribute__("sets").iteritems():
-            if item in items:
-                result.add(flag)
-        return result
-
-    def __setitem__(self, item, flags):
-        for flag, items in super(FlagStore,
-                                 self).__getattribute__("sets").iteritems():
-            if flag in flags:
-                items.add(item)
-            else:
-                items.discard(item)
-
-    def __getattribute__(self, flag):
-        "Return the set of items for a flag"
-        return super(FlagStore, self).__getattribute__("sets")[flag]
-
-
+seq = 0
 def lt(repo, one, two):
     """
     Is "one" an ancestor (reachable from) of "two"?
@@ -76,6 +48,8 @@ def lt(repo, one, two):
     single "two" and we are not interested in the merge-base, we just want to
     check ancestry.
     """
+    global seq
+    seq += 1
     if one.time > two.time:
         if debug:
             print("shortcut")
@@ -83,48 +57,78 @@ def lt(repo, one, two):
 
     queue = CommitPrioQ((one, two,))
 
-    fs = FlagStore(P1=[one.ref], P2=[two.ref], STALE=[])
+    one.flags_p1 = seq
+    two.flags_p2 = seq
 
     if debug:
-        print("p1: %s" % (", ".join([str(pygit2.Oid(e))[:12] for e in
-                                     fs.P1]),))
-        print("p2: %s" % (", ".join([str(pygit2.Oid(e))[:12] for e in
-                                     fs.P2]),))
+        for args in (("p1", lambda e : e.flags_p1 == seq,),
+                     ("p2", lambda e : e.flags_p2 == seq,),):
+            print("%s: %s" % (args[0], ", ".join(
+                [str(e) for e in repo.cache.values() if args[1](e)]),))
 
-    while queue.has_nonflagged(fs.STALE):
+    while queue.has_nonstale(repo, seq):
         commit = queue.pop()
-        flags = fs[commit.ref]
 
         if debug:
-            print("popped %s:%s" % (str(commit), flags,))
+            flags = []
+            for args in (("p1", lambda e : e.flags_p1 == seq,),
+                         ("p2", lambda e : e.flags_p2 == seq,),
+                         ("stale", lambda e : e.flags_stale == seq,),):
+                if args[1](commit):
+                    flags.append(args[0])
+            print("popped %s: %s" % (str(commit), " ".join(flags),))
 
-        if flags == set(["P1", "P2"]):
-            flags.add("STALE")
+        stale = commit.flags_stale == seq
+        if (commit.flags_p1 == seq and commit.flags_p2 == seq and
+            commit.flags_stale != seq):
+            stale = True
             if debug:
                 print("found a merge")
 
         for p_id in commit.parent_ids:
             p = repo[p_id]
-            p_flags = fs[p.ref]
-            if p_flags == flags:
+            if debug:
+                flags = []
+                for args in (("p1", lambda e : e.flags_p1 == seq,),
+                             ("p2", lambda e : e.flags_p2 == seq,),
+                             ("stale", lambda e : e.flags_stale == seq,),):
+                    if args[1](commit):
+                        flags.append(args[0])
+                print("    parent %s: %s" % (str(commit), " ".join(flags),))
+            if ((p.flags_p1 == seq) == (commit.flags_p1 == seq) and
+                (p.flags_p2 == seq) == (commit.flags_p2 == seq) and
+                (p.flags_stale == seq) == stale):
                 continue
 
-            if p.ref == one.ref and "P2" in flags:
+            if p.ref == one.ref and commit.flags_p2 == seq:
                 if debug:
-                    print("shortcut")
+                    print("    shortcut")
                 return True
-            fs[p.ref] = p_flags | flags
+            if debug:
+                flags = []
+            if commit.flags_p1 == seq and p.flags_p1 != seq:
+                p.flags_p1 = seq
+                if debug:
+                    flags.append("p1")
+            if commit.flags_p2 == seq and p.flags_p2 != seq:
+                p.flags_p2 = seq
+                if debug:
+                    flags.append("p2")
+            if stale:
+                p.flags_stale = seq
+                if debug:
+                    flags.append("stale")
             queue.push(p)
             if debug:
-                print("pushed %s: +%s" % (str(p), flags,))
+                print("pushed %s: +%s" % (str(p), " ".join(flags),))
 
     if debug:
-        print("p1: %s" % (", ".join([str(pygit2.Oid(e))[:12] for e in
-                                     fs.P1]),))
-        print("p2: %s" % (", ".join([str(pygit2.Oid(e))[:12] for e in
-                                     fs.P2]),))
+        for args in (("p1", lambda e : e.flags_p1 == seq,),
+                     ("p2", lambda e : e.flags_p2 == seq,),):
+            print("%s: %s" % (args[0], ", ".join(
+                [str(e) for e in repo.cache.values() if args[1](e)]),))
 
-    if one.ref in fs.P2:
+    if one.flags_p2 == seq:
         return True
     else:
         return False
@@ -136,6 +140,9 @@ class Commit(object):
         self.ref = ref
         self.time = time
         self.parent_ids = parent_ids
+        self.flags_p1 = 0
+        self.flags_p2 = 0
+        self.flags_stale = 0
 
     def __lt__(self, other):
         # newer commits with larger date first
