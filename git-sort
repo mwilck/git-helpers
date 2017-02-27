@@ -24,18 +24,14 @@ class CommitPrioQ(object):
         if commit.ref not in self.values:
             heapq.heappush(self.heap, commit)
             self.values.add(commit.ref)
+            return True
+        else:
+            return False
 
     def pop(self):
         commit = heapq.heappop(self.heap)
         self.values.remove(commit.ref)
         return commit
-
-    def has_nonstale(self, repo, seq):
-        "Cardinality of queue - flagged is non null"
-        for e in self.values:
-            if repo[e].flags_stale != seq:
-                return True
-        return False
 
 
 seq = 0
@@ -66,8 +62,11 @@ def lt(repo, one, two):
             print("%s: %s" % (args[0], ", ".join(
                 [str(e) for e in repo.cache.values() if args[1](e)]),))
 
-    while queue.has_nonstale(repo, seq):
+    qstale_nb = 0
+    while len(queue.values) - qstale_nb:
         commit = queue.pop()
+        if commit.flags_stale == seq:
+            qstale_nb -= 1
 
         if debug:
             flags = []
@@ -114,13 +113,22 @@ def lt(repo, one, two):
                 p.flags_p2 = seq
                 if debug:
                     flags.append("p2")
-            if stale:
+            already_stale = p.flags_stale == seq
+            if stale and not already_stale:
                 p.flags_stale = seq
+                qstale_nb += 1
                 if debug:
                     flags.append("stale")
-            queue.push(p)
             if debug:
-                print("pushed %s: +%s" % (str(p), " ".join(flags),))
+                before = len(queue.values)
+            if queue.push(p) and already_stale:
+                qstale_nb += 1
+            if debug:
+                if len(queue.values) - before == 0:
+                    op = "bumped"
+                else:
+                    op = "pushed"
+                print("    %s %s +%s" % (op, str(p), " ".join(flags),))
 
     if debug:
         for args in (("p1", lambda e : e.flags_p1 == seq,),
