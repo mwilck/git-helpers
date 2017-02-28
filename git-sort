@@ -183,9 +183,13 @@ class RepoCache(object):
         try:
             return self.cache[ref]
         except KeyError:
-            try:
-                pg2commit = self.pg2repo[pygit2.Oid(ref)]
-            except KeyError:
+            pg2commit = None
+            if len(ref) == 20:
+                try:
+                    pg2commit = self.pg2repo[pygit2.Oid(ref)]
+                except KeyError:
+                    pass
+            if pg2commit is None:
                 pg2commit = self.pg2repo.revparse_single(ref)
 
             if pg2commit.id.raw in self.cache:
