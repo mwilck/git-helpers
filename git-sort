@@ -162,13 +162,19 @@ class Commit(object):
 
 # Sort by topo order
 class Line(object):
+    nb = 0
     def __init__(self, repo, line):
         self.repo = repo
         self.line = line
+        self.num = Line.nb
+        Line.nb += 1
         self.commit = repo[self.line.split()[0]]
 
     def __lt__(self, other):
-        return lt(self.repo, self.commit, other.commit)
+        if self.commit.ref == other.commit.ref:
+            return self.num < other.num
+        else:
+            return lt(self.repo, self.commit, other.commit)
 
     def __repr__(self):
         return self.line
