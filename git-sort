@@ -210,7 +210,10 @@ class RepoCache(object):
 
 
 if __name__ == "__main__":
-    path = pygit2.discover_repository(os.getcwd())
+    try:
+        path = os.environ["GIT_DIR"]
+    except KeyError:
+        path = pygit2.discover_repository(os.getcwd())
     repo = RepoCache(pygit2.Repository(path))
 
     if len(sys.argv) == 3:
