@@ -212,13 +212,21 @@ class Line(object):
 
     def __lt__(self, other):
         if self.commit.ref == other.commit.ref:
-            return self.num < other.num
+            result = self.num < other.num
         else:
-            retval = lt(self.repo, self.commit, other.commit)
+            result = lt(self.repo, self.commit, other.commit)
             if debug:
                 check = lt_check(self.commit, other.commit)
-                assert(retval == check)
-            return retval
+                assert(result == check)
+
+        if debug:
+            convert = {
+                False : "!<",
+                True : " <",
+            }
+            print("lt: %s %s %s" % (str(self.commit), convert[result], str(other.commit),))
+
+        return result
 
     def __repr__(self):
         return self.line
@@ -253,6 +261,21 @@ class RepoCache(object):
             return result
 
 
+def selection_sort(a):
+    "stable variant"
+    n = len(a)
+    for j in range(n - 1):
+        i_min = j
+        for i in range(j + 1, n):
+            if a[i] < a[i_min]:
+                i_min = i
+
+        if i_min != j:
+            val = a[i_min]
+            del a[i_min]
+            a.insert(j, val)
+
+
 if __name__ == "__main__":
     try:
         path = os.environ["GIT_DIR"]
@@ -270,6 +293,6 @@ if __name__ == "__main__":
                    [e.strip() for e in sys.stdin.readlines()]
                    if l]
 
-        commits.sort()
+        selection_sort(commits)
 
         print("\n".join([str(i) for i in commits]))
