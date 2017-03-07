@@ -44,6 +44,8 @@ def lt(repo, one, two):
     git sources. We can simplify because, for our use case, there is only a
     single "two" and we are not interested in the merge-base, we just want to
     check ancestry.
+
+    one and two are Commit objects
     """
     global seq
     seq += 1
@@ -149,9 +151,6 @@ def lt_check(one, two):
     sp = subprocess.Popen(args, stdout=subprocess.PIPE,
                           stderr=subprocess.STDOUT)
     r = sp.communicate()
-
-    if debug:
-        print("%s -> %d" % (" ".join(args), sp.returncode,))
     
     if sp.returncode == 0:
         return True
@@ -160,6 +159,27 @@ def lt_check(one, two):
     else:
         print(r[0], file=sys.stderr)
         raise Exception("git merge-base exited with an error")
+
+
+def full_cmp(repo, one, two):
+    if one.ref == two.ref:
+        return "=="
+
+    result = lt(repo, one, two)
+    if debug:
+        check = lt_check(one, two)
+        assert(result == check)
+    if result:
+        return "<"
+
+    result = lt(repo, two, one)
+    if debug:
+        check = lt_check(two, one)
+        assert(result == check)
+    if result:
+        return ">"
+
+    return "<>"
 
 
 # Sort by date, insert into prio queue
@@ -243,12 +263,8 @@ if __name__ == "__main__":
     if len(sys.argv) == 3:
         a = repo[sys.argv[1]]
         b = repo[sys.argv[2]]
-        result = lt(repo, a, b)
-        convert = {
-            True : " <",
-            False : "!<",
-        }
-        print("%s %s %s" % (str(a), convert[result], str(b),))
+        result = full_cmp(repo, a, b)
+        print("%s %s %s" % (str(a), result, str(b),))
     else:
         commits = [Line(repo, l) for l in
                    [e.strip() for e in sys.stdin.readlines()]
