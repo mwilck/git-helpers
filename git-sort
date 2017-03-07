@@ -6,6 +6,7 @@ from __future__ import print_function
 import heapq
 import os
 import pygit2
+import subprocess
 import sys
 
 debug = False
@@ -142,6 +143,25 @@ def lt(repo, one, two):
         return False
 
 
+def lt_check(one, two):
+    args = ["git", "merge-base", "--is-ancestor", str(pygit2.Oid(one.ref)),
+            str(pygit2.Oid(two.ref))]
+    sp = subprocess.Popen(args, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT)
+    r = sp.communicate()
+
+    if debug:
+        print("%s -> %d" % (" ".join(args), sp.returncode,))
+    
+    if sp.returncode == 0:
+        return True
+    elif sp.returncode == 1:
+        return False
+    else:
+        print(r[0], file=sys.stderr)
+        raise Exception("git merge-base exited with an error")
+
+
 # Sort by date, insert into prio queue
 class Commit(object):
     def __init__(self, ref, time, parent_ids):
@@ -174,7 +194,11 @@ class Line(object):
         if self.commit.ref == other.commit.ref:
             return self.num < other.num
         else:
-            return lt(self.repo, self.commit, other.commit)
+            retval = lt(self.repo, self.commit, other.commit)
+            if debug:
+                check = lt_check(self.commit, other.commit)
+                assert(retval == check)
+            return retval
 
     def __repr__(self):
         return self.line
