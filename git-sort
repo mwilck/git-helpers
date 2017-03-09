@@ -3,296 +3,77 @@
 
 from __future__ import print_function
 
-import heapq
 import os
+import os.path
 import pygit2
+import shelve
 import subprocess
 import sys
 
-debug = False
+"""
+cache
+    heads[name]
+        ref
+    history[]
+"""
 
-class CommitPrioQ(object):
-    def __init__(self, iterable=[]):
-        self.heap = list(iterable)
-        heapq.heapify(self.heap)
-        self.values = set([commit.ref for commit in self.heap])
-
-    def __repr__(self):
-        return ", ".join(["(%d, %s,)" % (commit.time, str(commit),) for commit
-                          in sorted(self.heap)])
-
-    def push(self, commit):
-        if commit.ref not in self.values:
-            heapq.heappush(self.heap, commit)
-            self.values.add(commit.ref)
-            return True
-        else:
-            return False
-
-    def pop(self):
-        commit = heapq.heappop(self.heap)
-        self.values.remove(commit.ref)
-        return commit
-
-
-seq = 0
-def lt(repo, one, two):
-    """
-    Is "one" an ancestor (reachable from) of "two"?
-
-    This algorithms is a simplified version of paint_down_to_common() in the
-    git sources. We can simplify because, for our use case, there is only a
-    single "two" and we are not interested in the merge-base, we just want to
-    check ancestry.
-
-    one and two are Commit objects
-    """
-    global seq
-    seq += 1
-    if one.time > two.time:
-        if debug:
-            print("shortcut")
-        return False
-
-    queue = CommitPrioQ((one, two,))
-
-    one.flags_p1 = seq
-    two.flags_p2 = seq
-
-    if debug:
-        for args in (("p1", lambda e : e.flags_p1 == seq,),
-                     ("p2", lambda e : e.flags_p2 == seq,),):
-            print("%s: %s" % (args[0], ", ".join(
-                [str(e) for e in repo.cache.values() if args[1](e)]),))
-
-    qstale_nb = 0
-    while len(queue.values) - qstale_nb:
-        commit = queue.pop()
-        if commit.flags_stale == seq:
-            qstale_nb -= 1
-
-        if debug:
-            flags = []
-            for args in (("p1", lambda e : e.flags_p1 == seq,),
-                         ("p2", lambda e : e.flags_p2 == seq,),
-                         ("stale", lambda e : e.flags_stale == seq,),):
-                if args[1](commit):
-                    flags.append(args[0])
-            print("popped %s: %s" % (str(commit), " ".join(flags),))
-
-        stale = commit.flags_stale == seq
-        if (commit.flags_p1 == seq and commit.flags_p2 == seq and
-            commit.flags_stale != seq):
-            stale = True
-            if debug:
-                print("found a merge")
-
-        for p_id in commit.parent_ids:
-            p = repo[p_id]
-            if debug:
-                flags = []
-                for args in (("p1", lambda e : e.flags_p1 == seq,),
-                             ("p2", lambda e : e.flags_p2 == seq,),
-                             ("stale", lambda e : e.flags_stale == seq,),):
-                    if args[1](commit):
-                        flags.append(args[0])
-                print("    parent %s: %s" % (str(commit), " ".join(flags),))
-            if ((p.flags_p1 == seq) == (commit.flags_p1 == seq) and
-                (p.flags_p2 == seq) == (commit.flags_p2 == seq) and
-                (p.flags_stale == seq) == stale):
-                continue
-
-            if p.ref == one.ref and commit.flags_p2 == seq:
-                if debug:
-                    print("    shortcut")
-                return True
-            if debug:
-                flags = []
-            if commit.flags_p1 == seq and p.flags_p1 != seq:
-                p.flags_p1 = seq
-                if debug:
-                    flags.append("p1")
-            if commit.flags_p2 == seq and p.flags_p2 != seq:
-                p.flags_p2 = seq
-                if debug:
-                    flags.append("p2")
-            already_stale = p.flags_stale == seq
-            if stale and not already_stale:
-                p.flags_stale = seq
-                qstale_nb += 1
-                if debug:
-                    flags.append("stale")
-            if debug:
-                before = len(queue.values)
-            if queue.push(p) and already_stale:
-                qstale_nb += 1
-            if debug:
-                if len(queue.values) - before == 0:
-                    op = "bumped"
-                else:
-                    op = "pushed"
-                print("    %s %s +%s" % (op, str(p), " ".join(flags),))
-
-    if debug:
-        for args in (("p1", lambda e : e.flags_p1 == seq,),
-                     ("p2", lambda e : e.flags_p2 == seq,),):
-            print("%s: %s" % (args[0], ", ".join(
-                [str(e) for e in repo.cache.values() if args[1](e)]),))
-
-    if one.flags_p2 == seq:
-        return True
-    else:
-        return False
-
-
-def lt_check(one, two):
-    args = ["git", "merge-base", "--is-ancestor", str(pygit2.Oid(one.ref)),
-            str(pygit2.Oid(two.ref))]
-    sp = subprocess.Popen(args, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT)
-    r = sp.communicate()
-    
-    if sp.returncode == 0:
-        return True
-    elif sp.returncode == 1:
-        return False
-    else:
-        print(r[0], file=sys.stderr)
-        raise Exception("git merge-base exited with an error")
-
-
-def full_cmp(repo, one, two):
-    if one.ref == two.ref:
-        return "=="
-
-    result = lt(repo, one, two)
-    if debug:
-        check = lt_check(one, two)
-        assert(result == check)
-    if result:
-        return "<"
-
-    result = lt(repo, two, one)
-    if debug:
-        check = lt_check(two, one)
-        assert(result == check)
-    if result:
-        return ">"
-
-    return "<>"
-
-
-# Sort by date, insert into prio queue
-class Commit(object):
-    def __init__(self, ref, time, parent_ids):
-        self.ref = ref
-        self.time = time
-        self.parent_ids = parent_ids
-        self.flags_p1 = 0
-        self.flags_p2 = 0
-        self.flags_stale = 0
-
-    def __lt__(self, other):
-        # newer commits with larger date first
-        return self.time > other.time
-
-    def __repr__(self):
-        return str(pygit2.Oid(self.ref))[:12]
-
-
-# Sort by topo order
-class Line(object):
-    nb = 0
-    def __init__(self, repo, line):
-        self.repo = repo
-        self.line = line
-        self.num = Line.nb
-        Line.nb += 1
-        self.commit = repo[self.line.split()[0]]
-
-    def __lt__(self, other):
-        if self.commit.ref == other.commit.ref:
-            result = self.num < other.num
-        else:
-            result = lt(self.repo, self.commit, other.commit)
-            if debug:
-                check = lt_check(self.commit, other.commit)
-                assert(result == check)
-
-        if debug:
-            convert = {
-                False : "!<",
-                True : " <",
-            }
-            print("lt: %s %s %s" % (str(self.commit), convert[result], str(other.commit),))
-
-        return result
-
-    def __repr__(self):
-        return self.line
-
-
-class RepoCache(object):
-    def __init__(self, pg2repo):
-        self.pg2repo = pg2repo
-        self.cache = {}
-
-    def __getitem__(self, ref):
-        try:
-            return self.cache[ref]
-        except KeyError:
-            pg2commit = None
-            if len(ref) == 20:
-                try:
-                    pg2commit = self.pg2repo[pygit2.Oid(ref)]
-                except KeyError:
-                    pass
-            if pg2commit is None:
-                pg2commit = self.pg2repo.revparse_single(ref)
-
-            if pg2commit.id.raw in self.cache:
-                return self.cache[pg2commit.id.raw]
-
-            committer = pg2commit.committer
-            result = Commit(pg2commit.id.raw,
-                            committer.time - committer.offset,
-                            [p.raw for p in pg2commit.parent_ids])
-            self.cache[ref] = result
-            return result
-
-
-def selection_sort(a):
-    "stable variant"
-    n = len(a)
-    for j in range(n - 1):
-        i_min = j
-        for i in range(j + 1, n):
-            if a[i] < a[i_min]:
-                i_min = i
-
-        if i_min != j:
-            val = a[i_min]
-            del a[i_min]
-            a.insert(j, val)
-
+head_names = [
+    "origin/master",
+    "net/master",
+    "net-next/master",
+]
 
 if __name__ == "__main__":
     try:
         path = os.environ["GIT_DIR"]
     except KeyError:
         path = pygit2.discover_repository(os.getcwd())
-    repo = RepoCache(pygit2.Repository(path))
+    repo = pygit2.Repository(path)
 
-    if len(sys.argv) == 3:
-        a = repo[sys.argv[1]]
-        b = repo[sys.argv[2]]
-        result = full_cmp(repo, a, b)
-        print("%s %s %s" % (str(a), result, str(b),))
+    heads = {}
+    for name in head_names:
+        try:
+            commit = repo.revparse_single(name)
+        except KeyError:
+            pass
+        else:
+            heads[name] = str(commit.id)
+    if len(heads) == 0:
+        raise Exception("Couldn't find any heads, edit the \"head_names\" variable.")
+
+    cache = shelve.open(os.path.expanduser("~/.cache/git-sort"))
+    try:
+        c_heads = cache["heads"]
+    except KeyError:
+        c_heads = None
+
+    if c_heads != heads:
+        args = ["git", "log", "--topo-order", "--reverse", "--pretty=tformat:%H"]
+        args.extend(heads.keys())
+        sp = subprocess.Popen(args, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT)
+
+        history = [l.strip() for l in sp.stdout.readlines()]
+
+        r = sp.communicate()
+        
+        if sp.returncode != 0:
+            print("\n".join(history), file=sys.stderr)
+            raise Exception("git log exited with an error")
+        cache["heads"] = heads
+        cache["history"] = history
     else:
-        commits = [Line(repo, l) for l in
-                   [e.strip() for e in sys.stdin.readlines()]
-                   if l]
+        history = cache["history"]
+    cache.close()
+    
+    lines = {}
+    for line in sys.stdin.readlines():
+        line = line.strip()
+        commit = repo.revparse_single(line.split()[0])
+        lines[str(commit.id)] = line
 
-        selection_sort(commits)
-
-        print("\n".join([str(i) for i in commits]))
+    for commit in history:
+        line = lines.pop(commit, None)
+        while line:
+            print(line)
+            line = lines.pop(commit, None)
