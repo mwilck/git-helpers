@@ -55,8 +55,7 @@ if __name__ == "__main__":
 
         history = [l.strip() for l in sp.stdout.readlines()]
 
-        r = sp.communicate()
-        
+        sp.communicate()
         if sp.returncode != 0:
             print("\n".join(history), file=sys.stderr)
             raise Exception("git log exited with an error")
@@ -65,7 +64,7 @@ if __name__ == "__main__":
     else:
         history = cache["history"]
     cache.close()
-    
+
     lines = {}
     for line in sys.stdin.readlines():
         line = line.strip()
@@ -80,4 +79,4 @@ if __name__ == "__main__":
         linelist = lines.pop(commit, None)
         if linelist:
             print("\n".join(linelist))
-    assert(len(lines) == 0)
+    assert len(lines) == 0
