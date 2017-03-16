@@ -1,22 +1,24 @@
 #!/bin/bash
 
 while read file; do
-	orig=$(echo "$file" | sed -re 's/\.rej$//')
+	orig=${file%.rej}
 	if [ -e "$orig" ]; then
-		args+="$orig $file"$'\n'
+		args+=("$orig" "$file")
 	fi
 done <<< "$(find ./ -name "*.rej")"
 
-unmerged=$(git ls-files --unmerged | awk '{print $4}' | uniq)
-if [ "$unmerged" ]; then
-	args+=$unmerged
+git_unmerged=$(git ls-files --unmerged | awk '{print $4}' | uniq)
+if [ "$git_unmerged" ]; then
+	args+=($git_unmerged)
+	extra_arg='+/^[<=>]\{7}'
 fi
 
-args=$(echo "$args" | xargs)
+quilt_unmerged=".pc/merge-conflicts"
+if [ -f "$quilt_unmerged" ]; then
+	args+=($(cat "$quilt_unmerged"))
+	extra_arg='+/^[<=>]\{7}'
+fi
+
 if [ "$args" ]; then
-	if [ "$unmerged" ]; then
-		vi -p $args '+/^[<=>]\{7}'
-	else
-		vi -p $args
-	fi
+	vi -p "${args[@]}" $extra_arg
 fi
