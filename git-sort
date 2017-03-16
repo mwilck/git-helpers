@@ -67,8 +67,7 @@ if __name__ == "__main__":
 
     lines = {}
     for line in sys.stdin.readlines():
-        line = line.strip()
-        commit = repo.revparse_single(line.split()[0])
+        commit = repo.revparse_single(line.strip().split()[0])
         h = str(commit.id)
         if h in lines:
             lines[h].append(line)
@@ -76,7 +75,6 @@ if __name__ == "__main__":
             lines[h] = [line]
 
     for commit in history:
-        linelist = lines.pop(commit, None)
-        if linelist:
-            print("\n".join(linelist))
+        for line in lines.pop(commit, []):
+            print(line, end="")
     assert len(lines) == 0
