@@ -12,11 +12,12 @@ usage () {
 	echo "    -s, --short         Use format <abbrev> <subject> (<desc>) [default]"
 	echo "    -f, --fixes         Use format <abbrev12> (\"<subject>\")"
 	echo "    -l, --long          Use format <abbrev12> (\"<subject>\", <desc>)"
+	echo "    -m, --mini          Use format <abbrev12> (<desc>)"
 	echo "    -h, --help          Print this help"
 	echo ""
 }
 
-result=$(getopt -o sflh --long short,fixes,long,help -n "$progname" -- "$@")
+result=$(getopt -o sflmh --long short,fixes,long,mini,help -n "$progname" -- "$@")
 retval=$?
 if [ $retval -eq 1 ]; then
 	usage > /dev/stderr
@@ -38,6 +39,9 @@ while true ; do
 					;;
 		-l|--long)
 					format=long
+					;;
+		-m|--mini)
+					format=mini
 					;;
                 -h|--help)
 					usage
@@ -61,7 +65,7 @@ if [ $(echo "$revs" | wc -l) -eq 1 ]; then
 fi
 
 echo "$revs" | git rev-list $limit --stdin | while read commit; do
-	if [ $format = "short" -o $format = "long" ]; then
+	if [ $format = "short" -o $format = "long" -o $format = "mini" ]; then
 		desc=$(git describe --contains --match "v*" $commit 2>/dev/null)
 		if [ -z "$desc" ]; then
 			desc=$(git describe --contains --all $commit)
@@ -78,6 +82,9 @@ echo "$revs" | git rev-list $limit --stdin | while read commit; do
 			;;
 		long)
 			echo "$(git log --max-count=1 --abbrev=12 --pretty="format:%h (\"%s\"" $commit), $desc)"
+			;;
+		mini)
+			echo "$(git log --max-count=1 --abbrev=12 --pretty="format:%h" $commit) ($desc)"
 			;;
 	esac
 done
