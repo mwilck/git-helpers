@@ -133,8 +133,15 @@ if __name__ == "__main__":
     repo = pygit2.Repository(path)
 
     lines = {}
+    num = 0
     for line in sys.stdin.readlines():
-        commit = repo.revparse_single(line.strip().split(None, 1)[0])
+        num = num + 1
+        try:
+            commit = repo.revparse_single(line.strip().split(None, 1)[0])
+        except IndexError:
+            print("Error: did not find a commit hash on line %d:\n%s" %
+                  (num, line.strip(),), file=sys.stderr)
+            sys.exit(1)
         h = str(commit.id)
         if h in lines:
             lines[h].append(line)
