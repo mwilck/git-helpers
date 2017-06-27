@@ -3,8 +3,10 @@
 
 from __future__ import print_function
 
+import argparse
 import os
 import os.path
+import pprint
 import pygit2
 import shelve
 import subprocess
@@ -57,7 +59,7 @@ def _get_heads(repo):
                     commit = repo.revparse_single(ref)
                 except KeyError:
                     raise Exception("Could not read ref \"%s\", does it not "
-                                    "have a master branch?." % (ref,))
+                                    "have a master branch?" % (ref,))
                 heads.append((display_name, str(commit.id),))
                 continue
 
@@ -92,6 +94,10 @@ def _rebuild_history(heads):
     return history
 
 
+def _get_cache():
+    return shelve.open(os.path.expanduser("~/.cache/git-sort"))
+
+
 def _get_history(heads):
     """
     cache
@@ -100,7 +106,7 @@ def _get_history(heads):
         history[display name][]
             git hash represented as string of 40 characters
     """
-    cache = shelve.open(os.path.expanduser("~/.cache/git-sort"))
+    cache = _get_cache()
     try:
         c_heads = cache["heads"]
     except KeyError:
@@ -131,11 +137,38 @@ def git_sort(repo, mapping):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Sort input lines according to the upstream order of "
+        "commits that each line represents, with the first word on the line "
+        "taken to be a commit id.")
+    parser.add_argument("-d", "--dump-heads", action="store_true",
+                        help="Print the branch heads used for sorting "
+                        "(debugging).")
+    args = parser.parse_args()
+
     try:
         path = os.environ["GIT_DIR"]
     except KeyError:
         path = pygit2.discover_repository(os.getcwd())
     repo = pygit2.Repository(path)
+
+    if args.dump_heads:
+        print("Cached heads:")
+        cache = _get_cache()
+        try:
+            c_heads = cache["heads"]
+        except KeyError:
+            c_heads = None
+        pprint.pprint(c_heads)
+        print("Current heads:")
+        heads = _get_heads(repo)
+        pprint.pprint(heads)
+        if c_heads == heads:
+            action = "Will not"
+        else:
+            action = "Will"
+        print("%s rebuild history" % (action,))
+        sys.exit(0)
 
     lines = {}
     num = 0
