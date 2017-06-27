@@ -21,13 +21,18 @@ import sys
 head_names = (
     ("linux.git", [
         "git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
+        "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
         "https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git",
     ]),
     ("net", [
         "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",
+        "https://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",
+        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/davem/net.git",
     ]),
     ("net-next", [
         "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
+        "https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
+        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/davem/net-next.git",
     ]),
 )
 
