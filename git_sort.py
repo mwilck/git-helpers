@@ -87,7 +87,8 @@ def _rebuild_history(heads):
 
         sp.communicate()
         if sp.returncode != 0:
-            raise Exception("git log exited with an error:\n" + "\n".join(history[display_name]))
+            raise Exception("git log exited with an error:\n" +
+                            "\n".join(history[display_name]))
 
         processed.append("^%s" % (ref,))
 
@@ -195,7 +196,8 @@ if __name__ == "__main__":
             print(line, end="")
 
     if len(lines) != 0:
-        print("Error: the following entries were not found upstream:", file=sys.stderr)
+        print("Error: the following entries were not found upstream:",
+              file=sys.stderr)
         for line_list in lines.values():
             for line in line_list:
                 print(line, end="")
