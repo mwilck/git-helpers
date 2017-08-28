@@ -176,8 +176,12 @@ if __name__ == "__main__":
         num = num + 1
         try:
             commit = repo.revparse_single(line.strip().split(None, 1)[0])
-        except IndexError:
+        except ValueError:
             print("Error: did not find a commit hash on line %d:\n%s" %
+                  (num, line.strip(),), file=sys.stderr)
+            sys.exit(1)
+        except KeyError:
+            print("Error: commit hash on line %d not found in the repository:\n%s" %
                   (num, line.strip(),), file=sys.stderr)
             sys.exit(1)
         h = str(commit.id)
