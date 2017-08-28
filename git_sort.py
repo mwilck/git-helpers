@@ -54,12 +54,12 @@ def _get_heads(repo):
     for display_name, urls in head_names:
         for url in urls:
             if url in remotes:
+                rev = "%s/master" % (remotes[url],)
                 try:
-                    ref = "%s/master" % (remotes[url],)
-                    commit = repo.revparse_single(ref)
+                    commit = repo.revparse_single(rev)
                 except KeyError:
-                    raise Exception("Could not read ref \"%s\", does it not "
-                                    "have a master branch?" % (ref,))
+                    raise Exception("Could not read revision \"%s\", does that "
+                                    "remote not have a master branch?" % (rev,))
                 heads.append((display_name, str(commit.id),))
                 continue
 
@@ -75,8 +75,8 @@ def _rebuild_history(heads):
     processed = []
     history = {}
     args = ["git", "log", "--topo-order", "--reverse", "--pretty=tformat:%H"]
-    for display_name, ref in heads:
-        sp = subprocess.Popen(args + processed + [ref], stdout=subprocess.PIPE,
+    for display_name, rev in heads:
+        sp = subprocess.Popen(args + processed + [rev], stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT)
 
         if display_name in history:
@@ -90,7 +90,7 @@ def _rebuild_history(heads):
             raise Exception("git log exited with an error:\n" +
                             "\n".join(history[display_name]))
 
-        processed.append("^%s" % (ref,))
+        processed.append("^%s" % (rev,))
 
     return history
 
@@ -127,7 +127,7 @@ def _get_history(heads):
 def git_sort(repo, mapping):
     heads = _get_heads(repo)
     history = _get_history(heads)
-    for display_name, ref in heads:
+    for display_name, rev in heads:
         for commit in history[display_name]:
             try:
                 yield (display_name, mapping.pop(commit),)

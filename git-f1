@@ -1,7 +1,7 @@
 #!/bin/bash
 
 usage () {
-	echo "Usage: git f1 <refspec>"
+	echo "Usage: git f1 <rev>"
 	echo ""
 	echo "Output one commit formatted as a patch."
 	echo ""
@@ -12,7 +12,7 @@ if [ "$1" = "-h" ]; then
 	exit
 fi
 
-refspec=$1
+rev=$1
 shift
 
 if [ -n "$1" ]; then
@@ -21,11 +21,11 @@ if [ -n "$1" ]; then
 	exit 1
 fi
 
-if ! ref=$(git rev-parse --verify "${refspec:-HEAD}^{commit}"); then
+if ! commit=$(git rev-parse --verify "${rev:-HEAD}^{commit}"); then
 	exit 1
 fi
 
-if git cat-file -p $ref | awk '
+if git cat-file -p $commit | awk '
 	/^parent/ {
 		n++
 		if (n > 1) {
@@ -36,8 +36,8 @@ if git cat-file -p $ref | awk '
 		exit
 	}'; then
 	# not a merge
-	git format-patch --stdout --notes --max-count=1 $ref
+	git format-patch --stdout --notes --max-count=1 $commit
 else
-	echo "Warning: $ref is a merge commit" > /dev/stderr
-	git show $ref
+	echo "Warning: $commit is a merge commit" > /dev/stderr
+	git show $commit
 fi
