@@ -124,13 +124,21 @@ def _get_history(heads):
     return history
 
 
+class SortedEntry(object):
+    def __init__(self, head_name, value):
+        self.head_name = head_name
+        self.value = value
+    def __repr__(self):
+        return "%s = %s" % (self.head_name, pprint.pformat(self.value),)
+
+
 def git_sort(repo, mapping):
     heads = _get_heads(repo)
     history = _get_history(heads)
     for head_name, rev in heads:
         for commit in history[head_name]:
             try:
-                yield (head_name, mapping.pop(commit),)
+                yield SortedEntry(head_name, mapping.pop(commit),)
             except KeyError:
                 pass
 
@@ -191,14 +199,12 @@ if __name__ == "__main__":
         else:
             lines[h] = [line]
 
-    for head_name, line_list in git_sort(repo, lines):
-        for line in line_list:
-            print(line, end="")
+    print("".join([line for entry in git_sort(repo, lines) for line in
+                   entry.value]), end="")
 
     if len(lines) != 0:
         print("Error: the following entries were not found upstream:",
               file=sys.stderr)
-        for line_list in lines.values():
-            for line in line_list:
-                print(line, end="")
+        print("".join([line for line_list in lines.values() for line in
+                       line_list]), end="")
         sys.exit(1)
