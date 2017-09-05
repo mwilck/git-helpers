@@ -19,7 +19,7 @@ import sys
 # repositories lower down in the list. Said differently, commits should trickle
 # up from repositories at the end of the list to repositories higher up. For
 # example, network commits usually follow "net-next" -> "net" -> "linux.git".
-# (display name, [list of possible remote urls])
+# (head name, [list of possible remote urls])
 head_names = (
     ("linux.git", [
         "git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
@@ -41,7 +41,7 @@ head_names = (
 
 def _get_heads(repo):
     """
-    Returns (display name, sha1)[]
+    Returns (head name, sha1)[]
     """
     heads = []
     remotes = {}
@@ -51,7 +51,7 @@ def _get_heads(repo):
         name = name.split(".")[1]
         remotes[url] = name
 
-    for display_name, urls in head_names:
+    for head_name, urls in head_names:
         for url in urls:
             if url in remotes:
                 rev = "%s/master" % (remotes[url],)
@@ -60,7 +60,7 @@ def _get_heads(repo):
                 except KeyError:
                     raise Exception("Could not read revision \"%s\", does that "
                                     "remote not have a master branch?" % (rev,))
-                heads.append((display_name, str(commit.id),))
+                heads.append((head_name, str(commit.id),))
                 continue
 
     # According to the urls in head_names, this is not a clone of linux.git
@@ -75,20 +75,20 @@ def _rebuild_history(heads):
     processed = []
     history = {}
     args = ["git", "log", "--topo-order", "--reverse", "--pretty=tformat:%H"]
-    for display_name, rev in heads:
+    for head_name, rev in heads:
         sp = subprocess.Popen(args + processed + [rev], stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT)
 
-        if display_name in history:
-            raise Exception("display name \"%s\" is not unique." %
-                            (display_name,))
+        if head_name in history:
+            raise Exception("head name \"%s\" is not unique." %
+                            (head_name,))
 
-        history[display_name] = [l.strip() for l in sp.stdout.readlines()]
+        history[head_name] = [l.strip() for l in sp.stdout.readlines()]
 
         sp.communicate()
         if sp.returncode != 0:
             raise Exception("git log exited with an error:\n" +
-                            "\n".join(history[display_name]))
+                            "\n".join(history[head_name]))
 
         processed.append("^%s" % (rev,))
 
@@ -103,8 +103,8 @@ def _get_history(heads):
     """
     cache
         heads[]
-            (display name, sha1)
-        history[display name][]
+            (head name, sha1)
+        history[head name][]
             git hash represented as string of 40 characters
     """
     cache = _get_cache()
@@ -127,10 +127,10 @@ def _get_history(heads):
 def git_sort(repo, mapping):
     heads = _get_heads(repo)
     history = _get_history(heads)
-    for display_name, rev in heads:
-        for commit in history[display_name]:
+    for head_name, rev in heads:
+        for commit in history[head_name]:
             try:
-                yield (display_name, mapping.pop(commit),)
+                yield (head_name, mapping.pop(commit),)
             except KeyError:
                 pass
 
@@ -191,7 +191,7 @@ if __name__ == "__main__":
         else:
             lines[h] = [line]
 
-    for display_name, line_list in git_sort(repo, lines):
+    for head_name, line_list in git_sort(repo, lines):
         for line in line_list:
             print(line, end="")
 
