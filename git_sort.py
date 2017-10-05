@@ -36,6 +36,11 @@ head_names = (
         "https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
         "https://kernel.googlesource.com/pub/scm/linux/kernel/git/davem/net-next.git",
     ]),
+    ("rdma for-next", "k.o/for-next", [
+        "git://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",
+        "https://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",
+        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/dledford/rdma.git",
+    ]),
 )
 
 
