@@ -41,6 +41,11 @@ head_names = (
         "https://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",
         "https://kernel.googlesource.com/pub/scm/linux/kernel/git/dledford/rdma.git",
     ]),
+    ("scsi for-next", "for-next", [
+        "git://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",
+        "https://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",
+        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/jejb/scsi.git",
+    ]),
 )
 
 
