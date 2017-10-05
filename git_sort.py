@@ -19,19 +19,19 @@ import sys
 # repositories lower down in the list. Said differently, commits should trickle
 # up from repositories at the end of the list to repositories higher up. For
 # example, network commits usually follow "net-next" -> "net" -> "linux.git".
-# (head name, [list of possible remote urls])
+# (head name, remote branch name, [list of possible remote urls])
 head_names = (
-    ("linux.git", [
+    ("linux.git", "master", [
         "git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
         "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
         "https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git",
     ]),
-    ("net", [
+    ("net", "master", [
         "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",
         "https://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",
         "https://kernel.googlesource.com/pub/scm/linux/kernel/git/davem/net.git",
     ]),
-    ("net-next", [
+    ("net-next", "master", [
         "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
         "https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
         "https://kernel.googlesource.com/pub/scm/linux/kernel/git/davem/net-next.git",
@@ -51,10 +51,10 @@ def _get_heads(repo):
         name = name.split(".")[1]
         remotes[url] = name
 
-    for head_name, urls in head_names:
+    for head_name, branch_name, urls in head_names:
         for url in urls:
             if url in remotes:
-                rev = "%s/master" % (remotes[url],)
+                rev = "%s/%s" % (remotes[url], branch_name,)
                 try:
                     commit = repo.revparse_single(rev)
                 except KeyError:
