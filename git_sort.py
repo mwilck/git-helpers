@@ -208,7 +208,7 @@ if __name__ == "__main__":
                    entry.value]), end="")
 
     if len(lines) != 0:
-        print("Error: the following entries were not found upstream:",
+        print("Error: the following entries were not found in the indexed heads:",
               file=sys.stderr)
         print("".join([line for line_list in lines.values() for line in
                        line_list]), end="")
