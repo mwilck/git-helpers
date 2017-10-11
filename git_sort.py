@@ -160,9 +160,19 @@ if __name__ == "__main__":
                         "(debugging).")
     args = parser.parse_args()
 
+    _get_config()
+    path = ""
     try:
         path = os.environ["GIT_DIR"]
     except KeyError:
+        pass
+    if path == "":
+        try:
+            path = conf["git_dir"]
+            os.environ["GIT_DIR"] = path
+        except KeyError:
+            pass
+    if path == "":
         path = pygit2.discover_repository(os.getcwd())
     repo = pygit2.Repository(path)
 
