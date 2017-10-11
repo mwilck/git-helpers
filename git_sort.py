@@ -11,48 +11,43 @@ import pygit2
 import shelve
 import subprocess
 import sys
+import json
 
-# a list of each remote head which is indexed by this script
-# If a commit does not appear in one of these remotes, it is considered "not
-# upstream" and cannot be sorted.
-# Repositories that come first in the list should be pulling/merging from
-# repositories lower down in the list. Said differently, commits should trickle
-# up from repositories at the end of the list to repositories higher up. For
-# example, network commits usually follow "net-next" -> "net" -> "linux.git".
-# (head name, remote branch name, [list of possible remote urls])
-head_names = (
-    ("linux.git", "master", [
-        "git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
-        "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
-        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git",
-    ]),
-    ("net", "master", [
-        "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",
-        "https://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",
-        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/davem/net.git",
-    ]),
-    ("net-next", "master", [
-        "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
-        "https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
-        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/davem/net-next.git",
-    ]),
-    ("rdma for-next", "k.o/for-next", [
-        "git://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",
-        "https://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",
-        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/dledford/rdma.git",
-    ]),
-    ("scsi for-next", "for-next", [
-        "git://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",
-        "https://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",
-        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/jejb/scsi.git",
-    ]),
-)
+conf = {}
+head_names = ()
 
+def _get_config():
+    global conf
+    global head_names
+    if conf != {}:
+        return
+    for d in (os.getcwd(),
+              os.path.join(os.environ["HOME"], ".config", "git_sort"),
+              os.path.dirname(os.path.realpath(__file__))):
+        f = os.path.join(d, "git_sort.json")
+        if os.path.exists(f):
+            try:
+                with open(f, "r") as cf:
+                    _conf = json.loads(cf.read())
+                    for k in _conf.keys():
+                        if not conf.has_key(k):
+                            conf[k] = _conf[k]
+            except ValueError:
+                sys.stderr.write("error reading %s: %s\n" %
+                                 (f, sys.exc_info()[1]))
+                sys.exit(1)
+
+    if conf == {}:
+        raise RuntimeError("config file git_sort.json not found")
+
+    conf["head_names"] = tuple(tuple(x) for x in conf["head_names"])
+    head_names = conf["head_names"]
 
 def _get_heads(repo):
     """
     Returns (head name, sha1)[]
     """
+    _get_config()
     heads = []
     remotes = {}
     args = ("git", "config", "--get-regexp", "^remote\..+\.url$",)
