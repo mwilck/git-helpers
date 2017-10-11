@@ -57,6 +57,7 @@ def _get_heads(repo):
         remotes[url] = name
 
     for head_name, branch_name, urls in head_names:
+        found = False
         for url in urls:
             if url in remotes:
                 rev = "%s/%s" % (remotes[url], branch_name,)
@@ -66,12 +67,12 @@ def _get_heads(repo):
                     raise Exception("Could not read revision \"%s\", does that "
                                     "remote not have a master branch?" % (rev,))
                 heads.append((head_name, str(commit.id),))
+                found = True
                 continue
-
-    # According to the urls in head_names, this is not a clone of linux.git
-    # Sort according to commits reachable from the current head
-    if not heads or heads[0][0] != head_names[0][0]:
-        heads = [("HEAD", str(repo.revparse_single("HEAD").id),)]
+        if not found:
+            raise RuntimeError("remote head \"%s\" not found in repo %s, "
+                               "urls:\n\t%s" % (
+                head_name, repo.path, "\n\t".join(urls)))
 
     return heads
 
