@@ -1,0 +1,51 @@
+{
+  "git_dir": "",
+
+  "head_names": [
+    [
+      "linux.git",
+      "master",
+      [
+        "git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
+        "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
+        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git"
+      ]
+    ],
+    [
+      "net",
+      "master",
+      [
+        "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",
+        "https://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",
+        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/davem/net.git"
+      ]
+    ],
+    [
+      "net-next",
+      "master",
+      [
+        "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
+        "https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
+        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/davem/net-next.git"
+      ]
+    ],
+    [
+      "rdma for-next",
+      "k.o/for-next",
+      [
+        "git://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",
+        "https://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",
+        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/dledford/rdma.git"
+      ]
+    ],
+    [
+      "scsi for-next",
+      "for-next",
+      [
+        "git://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",
+        "https://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",
+        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/jejb/scsi.git"
+      ]
+    ]
+  ]
+}
