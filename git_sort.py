@@ -19,21 +19,23 @@ import sys
 # repositories lower down in the list. Said differently, commits should trickle
 # up from repositories at the end of the list to repositories higher up. For
 # example, network commits usually follow "net-next" -> "net" -> "linux.git".
-# (head name, remote branch name, canonical remote url)
+# (canonical remote url, remote branch name)
 # The canonical url is the one on git://git.kernel.org, if it exists.
-head_names = (
-    ("linux.git", "master",
-     "git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",),
-    ("net", "master",
-     "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",),
-    ("net-next", "master",
-     "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",),
-    ("rdma for-next", "k.o/for-next",
-     "git://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",),
-    ("scsi for-next", "for-next",
-     "git://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",),
+remotes = (
+    ("git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
+     "master",),
+    ("git://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",
+     "master",),
+    ("git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
+     "master",),
+    ("git://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",
+     "k.o/for-next",),
+    ("git://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",
+     "for-next",),
 )
 
+
+k_org_canon_prefix = "git://git.kernel.org/pub/scm/linux/kernel/git/"
 
 def cmp_url(canonical_url, remote_url):
     k_org_prefixes = [
@@ -44,10 +46,22 @@ def cmp_url(canonical_url, remote_url):
     for prefix in k_org_prefixes:
         if remote_url.startswith(prefix):
             remote_url = remote_url.replace(
-                prefix, "git://git.kernel.org/pub/scm/linux/kernel/git/")
+                prefix, k_org_canon_prefix)
             break
 
     return cmp(canonical_url, remote_url)
+
+
+def head_name(canonical_url, branch_name):
+    assert(canonical_url.startswith(k_org_canon_prefix))
+    ext = ".git"
+    assert(canonical_url.endswith(ext))
+
+    repo_name = canonical_url[len(k_org_canon_prefix):-1 * len(ext)]
+    if branch_name == "master":
+        return repo_name
+    else:
+        return "%s %s" % (repo_name, branch_name,)
 
 
 def _get_heads(repo):
@@ -55,15 +69,15 @@ def _get_heads(repo):
     Returns (head name, sha1)[]
     """
     heads = []
-    remotes = {}
+    repo_remotes = {}
     args = ("git", "config", "--get-regexp", "^remote\..+\.url$",)
     for line in subprocess.check_output(args).splitlines():
         name, url = line.split(None, 1)
         name = name.split(".")[1]
-        remotes[url] = name
+        repo_remotes[url] = name
 
-    for head_name, branch_name, canon_url in head_names:
-        for remote_url, remote_name in remotes.items():
+    for canon_url, branch_name in remotes:
+        for remote_url, remote_name in repo_remotes.items():
             if cmp_url(canon_url, remote_url) == 0:
                 rev = "%s/%s" % (remote_name, branch_name,)
                 try:
@@ -71,12 +85,13 @@ def _get_heads(repo):
                 except KeyError:
                     raise Exception("Could not read revision \"%s\"." %
                                     (rev,))
-                heads.append((head_name, str(commit.id),))
+                heads.append((head_name(canon_url, branch_name),
+                              str(commit.id),))
                 continue
 
-    # According to the urls in head_names, this is not a clone of linux.git
+    # According to the urls in remotes, this is not a clone of linux.git
     # Sort according to commits reachable from the current head
-    if not heads or heads[0][0] != head_names[0][0]:
+    if not heads or heads[0][0] != head_name(*remotes[0]):
         heads = [("HEAD", str(repo.revparse_single("HEAD").id),)]
 
     return heads
