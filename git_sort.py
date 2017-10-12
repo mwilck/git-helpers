@@ -105,10 +105,13 @@ def _get_heads(repo):
     return heads
 
 
-def _rebuild_history(heads):
+def _rebuild_history(heads, srcversion):
     processed = []
     history = {}
     args = ["git", "log", "--topo-order", "--reverse", "--pretty=tformat:%H"]
+
+    if (srcversion is not ""):
+        processed.append("^v%s" % srcversion)
     for head_name, rev in heads:
         sp = subprocess.Popen(args + processed + [rev], stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT)
@@ -141,18 +144,25 @@ def _get_history(heads):
         history[head name][]
             git hash represented as string of 40 characters
     """
+    srcversion = ""
+    try:
+        if os.environ["SRCVERSION"] != "":
+            srcversion = os.environ["SRCVERSION"]
+    except KeyError:
+        pass
+
     cache = _get_cache()
     try:
         c_heads = cache["heads"]
     except KeyError:
         c_heads = None
 
-    if c_heads != heads:
-        history = _rebuild_history(heads)
+    if c_heads != heads or not cache.has_key("history%s" % srcversion):
+        history = _rebuild_history(heads, srcversion)
         cache["heads"] = heads
-        cache["history"] = history
+        cache["history%s" % srcversion] = history
     else:
-        history = cache["history"]
+        history = cache["history%s" % srcversion]
     cache.close()
 
     return history
