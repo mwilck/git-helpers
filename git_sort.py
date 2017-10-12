@@ -32,6 +32,14 @@ remotes = (
      "k.o/for-next",),
     ("git://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",
      "for-next",),
+    ("git://git.kernel.org/pub/scm/linux/kernel/git/bp/bp.git",
+     "for-next",),
+    ("git://git.kernel.org/pub/scm/linux/kernel/git/jj/linux-apparmor.git",
+     "v4.8-aa2.8-out-of-tree",),
+    ("git://git.kernel.org/pub/scm/linux/kernel/git/tiwai/sound.git",
+     "master",),
+    ("git://git.kernel.org/pub/scm/linux/kernel/git/powerpc/linux.git",
+     "next",),
 )
 
 
