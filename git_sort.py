@@ -19,34 +19,35 @@ import sys
 # repositories lower down in the list. Said differently, commits should trickle
 # up from repositories at the end of the list to repositories higher up. For
 # example, network commits usually follow "net-next" -> "net" -> "linux.git".
-# (head name, remote branch name, [list of possible remote urls])
+# (head name, remote branch name, canonical remote url)
+# The canonical url is the one on git://git.kernel.org, if it exists.
 head_names = (
-    ("linux.git", "master", [
-        "git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
-        "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
-        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux.git",
-    ]),
-    ("net", "master", [
-        "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",
-        "https://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",
-        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/davem/net.git",
-    ]),
-    ("net-next", "master", [
-        "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
-        "https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",
-        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/davem/net-next.git",
-    ]),
-    ("rdma for-next", "k.o/for-next", [
-        "git://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",
-        "https://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",
-        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/dledford/rdma.git",
-    ]),
-    ("scsi for-next", "for-next", [
-        "git://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",
-        "https://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",
-        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/jejb/scsi.git",
-    ]),
+    ("linux.git", "master",
+     "git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",),
+    ("net", "master",
+     "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net.git",),
+    ("net-next", "master",
+     "git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git",),
+    ("rdma for-next", "k.o/for-next",
+     "git://git.kernel.org/pub/scm/linux/kernel/git/dledford/rdma.git",),
+    ("scsi for-next", "for-next",
+     "git://git.kernel.org/pub/scm/linux/kernel/git/jejb/scsi.git",),
 )
+
+
+def cmp_url(canonical_url, remote_url):
+    k_org_prefixes = [
+        "https://git.kernel.org/pub/scm/linux/kernel/git/",
+        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/",
+    ]
+
+    for prefix in k_org_prefixes:
+        if remote_url.startswith(prefix):
+            remote_url = remote_url.replace(
+                prefix, "git://git.kernel.org/pub/scm/linux/kernel/git/")
+            break
+
+    return cmp(canonical_url, remote_url)
 
 
 def _get_heads(repo):
@@ -61,15 +62,15 @@ def _get_heads(repo):
         name = name.split(".")[1]
         remotes[url] = name
 
-    for head_name, branch_name, urls in head_names:
-        for url in urls:
-            if url in remotes:
-                rev = "%s/%s" % (remotes[url], branch_name,)
+    for head_name, branch_name, canon_url in head_names:
+        for remote_url, remote_name in remotes.items():
+            if cmp_url(canon_url, remote_url) == 0:
+                rev = "%s/%s" % (remote_name, branch_name,)
                 try:
                     commit = repo.revparse_single(rev)
                 except KeyError:
-                    raise Exception("Could not read revision \"%s\", does that "
-                                    "remote not have a master branch?" % (rev,))
+                    raise Exception("Could not read revision \"%s\"." %
+                                    (rev,))
                 heads.append((head_name, str(commit.id),))
                 continue
 
